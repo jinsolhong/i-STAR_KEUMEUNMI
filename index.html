@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>금은미 브랜딩 프로젝트 — 2025년 6월</title>
+  <meta name="description" content="14K 골드 주얼리 브랜드 금은미 브랜딩 PM 웹앱 · Supabase 협업형">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💛</text></svg>">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════
+     로그인 화면
+     ════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-brand-en">Geumunmi · 14K Gold Jewelry</div>
+      <div class="login-brand-kr">금은미</div>
+      <div class="login-brand-sub">브랜딩 프로젝트 · 2025년 6월</div>
+      <div class="login-divider"></div>
+    </div>
+    <div class="login-title">팀 로그인</div>
+    <div class="login-field">
+      <label for="login-email">이메일</label>
+      <input type="email" id="login-email" placeholder="team@geumunmi.com" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label for="login-password">비밀번호</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button id="login-btn">로그인</button>
+    <div class="login-footer">
+      <a id="reset-pw-link">비밀번호를 잊으셨나요?</a>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     앱 셸 (로그인 후 표시)
+     ════════════════════════════════════════════════════ -->
+<div id="app-shell" style="display:none;">
+
+  <!-- ─── 사이드바 ─────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-en">Geumunmi · 14K Gold</div>
+      <div class="brand-kr">금은미</div>
+      <div class="brand-sub">브랜딩 프로젝트 · 2025년 6월</div>
+    </div>
+
+    <div class="nav-section-label">메뉴</div>
+
+    <div class="nav-item active" data-menu="dashboard">
+      <span class="nav-icon">◈</span> 대시보드
+    </div>
+    <div class="nav-item" data-menu="roadmap">
+      <span class="nav-icon">◉</span> 6월 로드맵
+    </div>
+    <div class="nav-item" data-menu="tasks">
+      <span class="nav-icon">◧</span> 업무 관리
+    </div>
+    <div class="nav-item" data-menu="documents">
+      <span class="nav-icon">◪</span> 산출물 작성
+    </div>
+    <div class="nav-item" data-menu="collab">
+      <span class="nav-icon">◫</span> 협업 요청
+    </div>
+    <!-- 관리자 전용 메뉴 -->
+    <div class="nav-item" data-menu="admin" data-role="admin">
+      <span class="nav-icon">◬</span> 사용자 관리
+      <span class="nav-badge">관리자</span>
+    </div>
+
+    <div class="nav-section-label">내보내기</div>
+    <div class="nav-item" onclick="App.exportRoadmapPDF()" style="cursor:pointer;">
+      <span class="nav-icon">📄</span> 로드맵 PDF
+    </div>
+    <div class="nav-item" onclick="App.exportAllPDF()" style="cursor:pointer;">
+      <span class="nav-icon">📋</span> 전체 산출물 PDF
+    </div>
+    <div class="nav-item" onclick="App.exportAllWord()" style="cursor:pointer;">
+      <span class="nav-icon">📝</span> 전체 Word
+    </div>
+    <div class="nav-item" onclick="App.exportJSON()" style="cursor:pointer;">
+      <span class="nav-icon">💾</span> JSON 백업
+    </div>
+
+    <!-- 사용자 정보 & 로그아웃 -->
+    <div class="sidebar-user" id="current-user-info">
+      <!-- JS로 채워짐 -->
+    </div>
+    <div class="sidebar-footer">
+      <div class="sidebar-actions">
+        <button class="sidebar-btn" id="logout-btn">
+          <span>→</span> 로그아웃
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─── 메인 콘텐츠 ──────────────────────────────── -->
+  <main class="main-content" id="main-content">
+
+    <!-- 대시보드 -->
+    <div class="view-panel" id="view-dashboard"></div>
+
+    <!-- 6월 로드맵 -->
+    <div class="view-panel" id="view-roadmap" style="display:none;"></div>
+
+    <!-- 업무 관리 -->
+    <div class="view-panel" id="view-tasks" style="display:none;"></div>
+
+    <!-- 산출물 작성 -->
+    <div class="view-panel" id="view-documents" style="display:none;"></div>
+
+    <!-- 협업 요청 -->
+    <div class="view-panel" id="view-collab" style="display:none;"></div>
+
+    <!-- 관리자: 사용자 관리 -->
+    <div class="view-panel" id="view-admin" style="display:none;"></div>
+
+  </main>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     모달: 산출물 작성/편집
+     ════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-doc">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3>산출물 작성</h3>
+      <button class="modal-close" onclick="UI.closeDocModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-doc-body">
+      <!-- JS로 채워짐 -->
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     모달: 업무 상세
+     ════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-task">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3>업무 상세</h3>
+      <button class="modal-close" onclick="UI.closeTaskModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-task-body">
+      <!-- JS로 채워짐 -->
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     모달: 협업 요청
+     ════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-collab">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>협업 요청 등록 / 수정</h3>
+      <button class="modal-close" onclick="UI.closeCollabModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="collab-task-id">
+      <div class="collab-task-name" id="collab-task-name"></div>
+      <div class="collab-form">
+        <div class="collab-form-row">
+          <div class="form-group">
+            <label>요청 부서</label>
+            <input type="text" id="collab-dept" placeholder="예: 디자인팀">
+          </div>
+          <div class="form-group">
+            <label>요청 담당자</label>
+            <input type="text" id="collab-person" placeholder="담당자 이름">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>요청 내용</label>
+          <textarea id="collab-content" placeholder="협업 요청 내용을 상세히 입력하세요..."></textarea>
+        </div>
+        <div class="collab-form-row">
+          <div class="form-group">
+            <label>요청 마감일</label>
+            <input type="date" id="collab-due">
+          </div>
+          <div class="form-group">
+            <label>요청 상태</label>
+            <select id="collab-status">
+              <option value="요청 전">요청 전</option>
+              <option value="요청 완료">요청 완료</option>
+              <option value="회신 대기">회신 대기</option>
+              <option value="진행 중">진행 중</option>
+              <option value="완료">완료</option>
+              <option value="보류">보류</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>참고 자료 링크 (선택)</label>
+          <input type="url" id="collab-link" placeholder="https://...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-outline btn-sm" onclick="UI.closeCollabModal()">취소</button>
+        <button class="btn-primary btn-sm" onclick="UI.saveCollabModal()">💾 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     모달 외부 클릭 시 닫기
+     ════════════════════════════════════════════════════ -->
+<script>
+  ['modal-doc', 'modal-task', 'modal-collab'].forEach(id => {
+    document.getElementById(id).addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.classList.remove('open');
+        document.body.classList.remove('modal-open');
+      }
+    });
+  });
+</script>
+
+<!-- ════════════════════════════════════════════════════
+     JS 모듈 로드 (순서 중요)
+     ════════════════════════════════════════════════════ -->
+<script src="assets/js/supabase.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/export.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+
+</body>
+</html>
