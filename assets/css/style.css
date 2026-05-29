@@ -364,3 +364,55 @@ body.modal-open{overflow:hidden;}
   .task-table th{background:#f9f5ef!important;-webkit-print-color-adjust:exact}
   .doc-fill-progress{background:#c9a96e!important;-webkit-print-color-adjust:exact}
 }
+
+/* ════════════════════════════════════════════════════════
+   대시보드 바로가기 버튼 (v2.1 추가)
+   ════════════════════════════════════════════════════════ */
+.dashboard-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 18px 0;
+}
+.shortcut-btn {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+.shortcut-btn:hover {
+  border-color: var(--gold);
+  background: var(--gold-p);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.shortcut-icon {
+  font-size: 22px;
+  color: var(--gold);
+}
+.shortcut-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+/* 통계 카드 hover 효과 강화 */
+.stat-card[onclick] {
+  transition: all 0.2s;
+}
+.stat-card[onclick]:hover {
+  border-color: var(--gold);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+.stat-card .stat-sub {
+  font-size: 10px;
+  color: var(--gold-d);
+  margin-top: 4px;
+}
