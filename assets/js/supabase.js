@@ -4,8 +4,8 @@
 // ════════════════════════════════════════════════════════
 
 // ── Supabase 설정 (환경별 변경 필요) ────────────────────
-const SUPABASE_URL      = 'YOUR_SUPABASE_URL';       // 예: https://xyzabc.supabase.co
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';  // 예: eyJhbGciOiJIUzI1NiIsInR5cCI6Ikp...
+const SUPABASE_URL      = 'http://eaxmycuogkarqznepbrd.supabase.co';       // 예: https://xyzabc.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVheG15Y3VvZ2thcnF6bmVwYnJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODYyMjYsImV4cCI6MjA5NTU2MjIyNn0.yFJRSyY3o0P-1GjA3dxOxoIxTgnCpzTOoXKAmy_T22U';  // 예: eyJhbGciOiJIUzI1NiIsInR5cCI6Ikp...
 
 // ── 클라이언트 생성 ──────────────────────────────────────
 const { createClient } = supabase;
