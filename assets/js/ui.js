@@ -1,12 +1,15 @@
 // ════════════════════════════════════════════════════════
-// ui.js — UI 렌더링 & 인터랙션 (Supabase 데이터 기반)
+// ui.js — UI 렌더링 & 인터랙션 (수정본 v2.1)
+// 수정사항:
+// 1. 대시보드 카드 클릭 시 해당 탭으로 이동
+// 2. 사이드바 내보내기 제거 → 산출물 탭에 통합
+// 3. 로딩 최적화 (세션 캐시 활용)
 // ════════════════════════════════════════════════════════
 
 const UI = {
-  // ── 앱 전역 상태 ────────────────────────────────────
   state: {
     tasks: [], documents: [], collaborations: [],
-    users: [], comments: {}
+    users: [], loaded: {}
   },
 
   // ════════════════════════════════════════════════════
@@ -58,21 +61,19 @@ const UI = {
     if (el) el.classList.add('active');
   },
 
-  // 권한별 메뉴 표시
   applyRoleVisibility() {
     const role = Auth.role;
     document.querySelectorAll('[data-role]').forEach(el => {
       const allowed = el.dataset.role.split(',');
       el.style.display = allowed.includes(role) ? '' : 'none';
     });
-    // 편집 버튼 숨기기 (viewer)
     if (role === 'viewer') {
       document.querySelectorAll('.edit-only').forEach(el => el.style.display = 'none');
     }
   },
 
   // ════════════════════════════════════════════════════
-  // 로그인 화면
+  // 로그인 / 앱 전환
   // ════════════════════════════════════════════════════
   renderLogin() {
     document.getElementById('app-shell').style.display = 'none';
@@ -103,16 +104,20 @@ const UI = {
   },
 
   // ════════════════════════════════════════════════════
-  // 대시보드
+  // 대시보드 — 카드 클릭 시 탭 이동
   // ════════════════════════════════════════════════════
   async renderDashboard() {
     const container = document.getElementById('view-dashboard');
     container.innerHTML = '<div class="page-loading">데이터를 불러오는 중...</div>';
     try {
-      const [tasks, documents] = await Promise.all([API.getTasks(), API.getDocuments()]);
-      this.state.tasks = tasks; this.state.documents = documents;
+      const [tasks, documents, users] = await Promise.all([
+        API.getTasks(), API.getDocuments(), API.getUsers()
+      ]);
+      this.state.tasks = tasks;
+      this.state.documents = documents;
+      this.state.users = users;
+
       const stats = await API.getStats(tasks, documents);
-      const users = await API.getUsers(); this.state.users = users;
 
       const teamCards = users.map(u => {
         const count = stats.byAssignee[u.name] || 0;
@@ -120,14 +125,14 @@ const UI = {
           <div class="team-avatar">${u.name.charAt(0)}</div>
           <div class="team-info">
             <div class="team-name">${u.name} <span class="team-role">${u.position||''}</span></div>
-            <div class="team-stat">담당 <strong>${count}</strong>건 · <span class="badge ${this.statusCls('완료')}">${this._roleLabel(u.role)}</span></div>
+            <div class="team-stat">담당 <strong>${count}</strong>건 · <span class="badge">${this._roleLabel(u.role)}</span></div>
           </div>
         </div>`;
       }).join('');
 
       const thisWeekHTML = stats.thisWeekTasks.length
         ? stats.thisWeekTasks.slice(0,6).map(t => `
-          <div class="week-task-item">
+          <div class="week-task-item" style="cursor:pointer;" onclick="App.navigate('tasks')">
             <span class="badge ${this.statusCls(t.status)}">${t.status}</span>
             <span class="task-name">${t.title}</span>
             <span class="task-assignee">${t.owner?.name||'미배정'}</span>
@@ -142,7 +147,7 @@ const UI = {
       });
       const delayedHTML = delayed.length
         ? delayed.slice(0,5).map(t => `
-          <div class="week-task-item delayed">
+          <div class="week-task-item delayed" style="cursor:pointer;" onclick="App.navigate('tasks')">
             <span class="badge ${this.statusCls(t.status)}">${t.status}</span>
             <span class="task-name">${t.title}</span>
             <span class="task-assignee">${t.owner?.name||'미배정'}</span>
@@ -162,25 +167,93 @@ const UI = {
     <span class="core-msg-text">"하루의 끝, 나에게 닿는 빛"</span>
   </div>
 </div>
+
+<!-- 통계 카드 — 클릭 시 해당 탭으로 이동 -->
 <div class="stat-cards">
-  <div class="stat-card stat-primary">
+  <div class="stat-card stat-primary" style="cursor:pointer;" onclick="App.navigate('tasks')">
     <div class="stat-label">전체 진행률</div>
     <div class="stat-value">${stats.progress}<span class="stat-unit">%</span></div>
     <div class="progress-bar-wrap"><div class="progress-bar" style="width:${stats.progress}%"></div></div>
     <div class="stat-sub">${stats.completed} / ${stats.total} 완료</div>
   </div>
-  <div class="stat-card"><div class="stat-label">전체 업무</div><div class="stat-value">${stats.total}<span class="stat-unit">건</span></div></div>
-  <div class="stat-card"><div class="stat-label">진행 중</div><div class="stat-value stat-blue">${stats.inProgress}<span class="stat-unit">건</span></div></div>
-  <div class="stat-card"><div class="stat-label">지연됨</div><div class="stat-value stat-red">${stats.delayed}<span class="stat-unit">건</span></div></div>
-  <div class="stat-card"><div class="stat-label">완료 산출물</div><div class="stat-value stat-green">${stats.docsCompleted}<span class="stat-unit">개</span></div></div>
-  <div class="stat-card"><div class="stat-label">협업 요청</div><div class="stat-value stat-orange">${stats.collabNeeded}<span class="stat-unit">건</span></div></div>
+  <div class="stat-card" style="cursor:pointer;" onclick="App.navigate('tasks')">
+    <div class="stat-label">전체 업무</div>
+    <div class="stat-value">${stats.total}<span class="stat-unit">건</span></div>
+    <div class="stat-sub">↗ 클릭하여 업무 관리</div>
+  </div>
+  <div class="stat-card" style="cursor:pointer;" onclick="App.navigate('roadmap')">
+    <div class="stat-label">진행 중</div>
+    <div class="stat-value stat-blue">${stats.inProgress}<span class="stat-unit">건</span></div>
+    <div class="stat-sub">↗ 클릭하여 로드맵 보기</div>
+  </div>
+  <div class="stat-card" style="cursor:pointer;" onclick="App.navigate('tasks')">
+    <div class="stat-label">지연됨</div>
+    <div class="stat-value stat-red">${stats.delayed}<span class="stat-unit">건</span></div>
+    <div class="stat-sub">↗ 클릭하여 확인</div>
+  </div>
+  <div class="stat-card" style="cursor:pointer;" onclick="App.navigate('documents')">
+    <div class="stat-label">완료 산출물</div>
+    <div class="stat-value stat-green">${stats.docsCompleted}<span class="stat-unit">개</span></div>
+    <div class="stat-sub">↗ 클릭하여 산출물 보기</div>
+  </div>
+  <div class="stat-card" style="cursor:pointer;" onclick="App.navigate('collab')">
+    <div class="stat-label">협업 요청</div>
+    <div class="stat-value stat-orange">${stats.collabNeeded}<span class="stat-unit">건</span></div>
+    <div class="stat-sub">↗ 클릭하여 협업 요청</div>
+  </div>
 </div>
+
 <div class="dashboard-grid">
-  <div class="dashboard-panel"><div class="panel-header"><h3>이번 주 핵심 업무</h3><span class="panel-count">${stats.thisWeekTasks.length}건</span></div><div class="panel-body">${thisWeekHTML}</div></div>
-  <div class="dashboard-panel"><div class="panel-header"><h3>지연된 업무</h3><span class="panel-count ${delayed.length>0?'count-red':''}">${delayed.length}건</span></div><div class="panel-body">${delayedHTML}</div></div>
+  <div class="dashboard-panel">
+    <div class="panel-header">
+      <h3>이번 주 핵심 업무</h3>
+      <span class="panel-count">${stats.thisWeekTasks.length}건</span>
+    </div>
+    <div class="panel-body">${thisWeekHTML}</div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);">
+      <button class="btn-outline btn-sm" onclick="App.navigate('roadmap')" style="width:100%;">로드맵 전체 보기 →</button>
+    </div>
+  </div>
+  <div class="dashboard-panel">
+    <div class="panel-header">
+      <h3>지연된 업무</h3>
+      <span class="panel-count ${delayed.length>0?'count-red':''}">${delayed.length}건</span>
+    </div>
+    <div class="panel-body">${delayedHTML}</div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);">
+      <button class="btn-outline btn-sm" onclick="App.navigate('tasks')" style="width:100%;">업무 관리 전체 보기 →</button>
+    </div>
+  </div>
 </div>
-<div class="dashboard-panel full-width"><div class="panel-header"><h3>팀원 현황</h3></div><div class="team-cards">${teamCards}</div></div>`;
-    } catch(e) { container.innerHTML = `<div class="error-state">데이터 로드 실패: ${e.message}</div>`; }
+
+<!-- 바로가기 버튼 -->
+<div class="dashboard-shortcuts">
+  <button class="shortcut-btn" onclick="App.navigate('roadmap')">
+    <span class="shortcut-icon">◉</span>
+    <span class="shortcut-label">6월 로드맵</span>
+  </button>
+  <button class="shortcut-btn" onclick="App.navigate('tasks')">
+    <span class="shortcut-icon">◧</span>
+    <span class="shortcut-label">업무 관리</span>
+  </button>
+  <button class="shortcut-btn" onclick="App.navigate('documents')">
+    <span class="shortcut-icon">◪</span>
+    <span class="shortcut-label">산출물 작성</span>
+  </button>
+  <button class="shortcut-btn" onclick="App.navigate('collab')">
+    <span class="shortcut-icon">◫</span>
+    <span class="shortcut-label">협업 요청</span>
+  </button>
+</div>
+
+<div class="dashboard-panel full-width">
+  <div class="panel-header"><h3>팀원 현황</h3></div>
+  <div class="team-cards">${teamCards}</div>
+</div>`;
+    } catch(e) {
+      container.innerHTML = `<div class="error-state">데이터 로드 실패: ${e.message}<br><br>
+        <button class="btn-primary btn-sm" onclick="UI.renderDashboard()">다시 시도</button></div>`;
+    }
   },
 
   // ════════════════════════════════════════════════════
@@ -190,7 +263,8 @@ const UI = {
     const container = document.getElementById('view-roadmap');
     container.innerHTML = '<div class="page-loading">로드맵을 불러오는 중...</div>';
     try {
-      const tasks = await API.getTasks(); this.state.tasks = tasks;
+      const tasks = await API.getTasks();
+      this.state.tasks = tasks;
       const WEEKS = [
         { n:1, title:'브랜드 진단 & 방향성 정리', period:'6월 2~6일', goal:'기존 브랜드 현황 파악 및 경쟁 분석을 통해 방향성 초안 도출', checkpoints:['경쟁 브랜드 분석 완료','타겟 고객 정의 완료','브랜드 방향성 초안 합의'], outputs:['브랜드 현황 진단','경쟁 브랜드 분석','타겟 페르소나'] },
         { n:2, title:'브랜드 전략 & 메시지 확정', period:'6월 9~13일', goal:'브랜드 정체성 구체화 및 핵심 메시지·슬로건 확정', checkpoints:['슬로건 최종 확정','브랜드 소개문 완성','페르소나 문서 완성'], outputs:['브랜드 정체성 문장','슬로건 / 서브 카피','브랜드 소개문'] },
@@ -240,9 +314,6 @@ const UI = {
             </table>
           </div>
           <div class="checkpoint-box"><div class="checkpoint-title">✓ 주차 체크포인트</div><ul class="checkpoint-list">${checkpoints}</ul></div>
-          <div class="week-export-bar edit-only">
-            <button class="btn-sm btn-outline" onclick="App.exportRoadmapPDF()"><span>📄</span> 로드맵 PDF</button>
-          </div>
         </div>`;
       }).join('');
 
@@ -255,7 +326,10 @@ const UI = {
 <div class="week-tabs">${weekTabs}</div>
 <div class="week-contents">${weekContents}</div>`;
       this.applyRoleVisibility();
-    } catch(e) { container.innerHTML = `<div class="error-state">로드 실패: ${e.message}</div>`; }
+    } catch(e) {
+      container.innerHTML = `<div class="error-state">로드 실패: ${e.message}<br><br>
+        <button class="btn-primary btn-sm" onclick="UI.renderRoadmap()">다시 시도</button></div>`;
+    }
   },
 
   switchWeek(n, btn) {
@@ -279,14 +353,15 @@ const UI = {
     const container = document.getElementById('view-tasks');
     container.innerHTML = '<div class="page-loading">업무 목록을 불러오는 중...</div>';
     try {
-      let tasks = await API.getTasks(); this.state.tasks = tasks;
-      const users = await API.getUsers(); this.state.users = users;
+      let tasks = await API.getTasks();
+      this.state.tasks = tasks;
+      const users = await API.getUsers();
+      this.state.users = users;
       if (filter.week) tasks = tasks.filter(t => t.week == filter.week);
       if (filter.owner) tasks = tasks.filter(t => t.owner?.name === filter.owner);
       if (filter.status) tasks = tasks.filter(t => t.status === filter.status);
       if (filter.search) tasks = tasks.filter(t => t.title.includes(filter.search));
 
-      const userOpts = users.map(u=>`<option value="${u.name}">${u.name}</option>`).join('');
       const rows = tasks.map(t => `
         <tr>
           <td class="task-name-cell">${this.esc(t.title)}</td>
@@ -358,7 +433,10 @@ const UI = {
     <tbody>${rows||'<tr><td colspan="12" class="empty-state">업무가 없습니다.</td></tr>'}</tbody>
   </table>
 </div>`;
-    } catch(e) { container.innerHTML = `<div class="error-state">로드 실패: ${e.message}</div>`; }
+    } catch(e) {
+      container.innerHTML = `<div class="error-state">로드 실패: ${e.message}<br><br>
+        <button class="btn-primary btn-sm" onclick="UI.renderTasks()">다시 시도</button></div>`;
+    }
   },
 
   async patchTask(id, fields) {
@@ -377,12 +455,13 @@ const UI = {
     body.innerHTML = '<div class="page-loading">불러오는 중...</div>';
     modal.classList.add('open'); document.body.classList.add('modal-open');
     try {
-      const [task, users, histories, comments] = await Promise.all([
-        API.getTasks().then(ts => ts.find(t => t.id === taskId)),
+      const [tasks, users, histories, comments] = await Promise.all([
+        API.getTasks(),
         API.getUsers(),
         API.getTaskHistories(taskId),
         API.getComments('task', taskId)
       ]);
+      const task = tasks.find(t => t.id === taskId);
       if (!task) { body.innerHTML = '<div class="error-state">업무를 찾을 수 없습니다.</div>'; return; }
       const canEdit = Auth.canEditTask(task);
       const userOpts = users.map(u=>`<option value="${u.id}" ${task.owner?.id===u.id?'selected':''}>${u.name}</option>`).join('');
@@ -394,6 +473,7 @@ const UI = {
           <span class="history-by">${h.changed_by_user?.name||'시스템'} · ${this.fmtDateTime(h.changed_at)}</span>
         </div>`).join('') || '<div class="empty-state">수정 이력이 없습니다.</div>';
       const commentsHTML = this._buildComments(comments, 'task', taskId);
+
       body.innerHTML = `
 <div class="task-detail-header">
   <div class="task-detail-week">W${task.week} — ${task.due_date||'날짜 미정'}</div>
@@ -433,7 +513,7 @@ const UI = {
   <span>최종 수정자: <strong>${task.updated_by_user?.name||'-'}</strong></span>
   <span>수정일: <strong>${this.fmtDateTime(task.updated_at)}</strong></span>
 </div>
-${Auth.canEdit ? `<div class="collab-section-action edit-only">
+${Auth.canEdit ? `<div class="collab-section-action edit-only" style="margin-top:12px;">
   <button class="btn-primary btn-sm" onclick="UI.openCollabModal('${taskId}')">협업 요청 등록/수정</button>
 </div>` : ''}
 <div class="history-section">
@@ -451,11 +531,15 @@ ${Auth.canEdit ? `<div class="collab-section-action edit-only">
     } catch(e) { body.innerHTML = `<div class="error-state">오류: ${e.message}</div>`; }
   },
 
-  closeTaskModal() { document.getElementById('modal-task').classList.remove('open'); document.body.classList.remove('modal-open'); },
+  closeTaskModal() {
+    document.getElementById('modal-task').classList.remove('open');
+    document.body.classList.remove('modal-open');
+  },
 
   _fieldLabel(field) {
-    const map = { title:'업무명', status:'상태', priority:'우선순위', owner_id:'담당자', writer_id:'작성자',
-      start_date:'시작일', due_date:'마감일', output_type:'산출물 유형', memo:'비고', collaboration_required:'협업 여부' };
+    const map = { title:'업무명', status:'상태', priority:'우선순위', owner_id:'담당자',
+      writer_id:'작성자', start_date:'시작일', due_date:'마감일',
+      output_type:'산출물 유형', memo:'비고', collaboration_required:'협업 여부' };
     return map[field] || field;
   },
 
@@ -498,10 +582,13 @@ ${Auth.canEdit ? `<div class="collab-section-action edit-only">
     } catch(e) { this.toast('저장 실패: ' + e.message, 'error'); }
   },
 
-  closeCollabModal() { document.getElementById('modal-collab').classList.remove('open'); document.body.classList.remove('modal-open'); },
+  closeCollabModal() {
+    document.getElementById('modal-collab').classList.remove('open');
+    document.body.classList.remove('modal-open');
+  },
 
   // ════════════════════════════════════════════════════
-  // 협업 요청 목록 뷰
+  // 협업 요청 목록
   // ════════════════════════════════════════════════════
   async renderCollabs() {
     const container = document.getElementById('view-collab');
@@ -534,19 +621,24 @@ ${Auth.canEdit ? `<div class="collab-section-action edit-only">
     <tbody>${rows||'<tr><td colspan="10" class="empty-state">협업 요청이 없습니다.</td></tr>'}</tbody>
   </table>
 </div>`;
-    } catch(e) { container.innerHTML = `<div class="error-state">로드 실패: ${e.message}</div>`; }
+    } catch(e) {
+      container.innerHTML = `<div class="error-state">로드 실패: ${e.message}<br><br>
+        <button class="btn-primary btn-sm" onclick="UI.renderCollabs()">다시 시도</button></div>`;
+    }
   },
 
   // ════════════════════════════════════════════════════
-  // 산출물 목록 뷰
+  // 산출물 목록 — 내보내기 버튼 통합
   // ════════════════════════════════════════════════════
   async renderDocuments() {
     const container = document.getElementById('view-documents');
     container.innerHTML = '<div class="page-loading">산출물을 불러오는 중...</div>';
     try {
       const [docs, tasks] = await Promise.all([API.getDocuments(), API.getTasks()]);
-      this.state.documents = docs; this.state.tasks = tasks;
+      this.state.documents = docs;
+      this.state.tasks = tasks;
       const completed = docs.filter(d=>d.is_completed).length;
+
       const cards = docs.map(doc => {
         const fillCount = [doc.purpose, doc.main_content, doc.detail_content, doc.decisions].filter(Boolean).length;
         const fill = Math.round((fillCount / 4) * 100);
@@ -562,25 +654,36 @@ ${Auth.canEdit ? `<div class="collab-section-action edit-only">
           <div class="doc-fill-bar"><div class="doc-fill-progress" style="width:${fill}%"></div></div>
           <div class="doc-fill-label">작성 완성도 ${fill}%</div>
           <div class="doc-card-actions">
-            <button class="btn-primary btn-sm" onclick="UI.openDocument('${doc.id}')">작성 / 수정</button>
+            <button class="btn-primary btn-sm" onclick="UI.openDocument('${doc.id}')">✏️ 작성 / 수정</button>
             <button class="btn-sm btn-outline" onclick="Exporter.exportDocPDF('${doc.id}')">PDF</button>
             <button class="btn-sm btn-outline" onclick="Exporter.exportDocWord('${doc.id}')">Word</button>
+            <button class="btn-sm btn-outline" onclick="Exporter.exportDocHTML('${doc.id}')">HTML</button>
+            <button class="btn-sm btn-outline" onclick="Exporter.exportDocMarkdown('${doc.id}')">MD</button>
           </div>
         </div>`;
       }).join('');
+
       container.innerHTML = `
 <div class="page-header">
   <div class="page-title-en">Documents</div>
   <h1>산출물 작성</h1>
   <p class="page-subtitle">브랜딩 산출물을 웹에서 직접 작성하고 내보내세요. (${completed}/${docs.length} 완료)</p>
 </div>
+
+<!-- 전체 내보내기 바 -->
 <div class="doc-export-bar">
-  <button class="btn-primary" onclick="App.exportAllPDF()">📋 전체 PDF 내보내기</button>
-  <button class="btn-outline" onclick="App.exportAllWord()">📝 전체 Word 내보내기</button>
-  <button class="btn-outline" onclick="App.exportJSON()">💾 전체 JSON 백업</button>
+  <div style="font-size:12px;font-weight:600;color:var(--brown);margin-right:8px;">전체 내보내기:</div>
+  <button class="btn-primary" onclick="App.exportAllPDF()">📋 전체 PDF</button>
+  <button class="btn-outline" onclick="App.exportAllWord()">📝 전체 Word</button>
+  <button class="btn-outline" onclick="App.exportRoadmapPDF()">🗺 로드맵 PDF</button>
+  <button class="btn-outline" onclick="App.exportJSON()">💾 JSON 백업</button>
 </div>
+
 <div class="doc-grid">${cards}</div>`;
-    } catch(e) { container.innerHTML = `<div class="error-state">로드 실패: ${e.message}</div>`; }
+    } catch(e) {
+      container.innerHTML = `<div class="error-state">로드 실패: ${e.message}<br><br>
+        <button class="btn-primary btn-sm" onclick="UI.renderDocuments()">다시 시도</button></div>`;
+    }
   },
 
   // ════════════════════════════════════════════════════
@@ -705,15 +808,20 @@ ${canEdit?`
       const ver = versions.find(v => v.id === versionId);
       if (!ver) return;
       const snap = ver.content_snapshot;
-      await API.saveDocument(docId, { purpose: snap.purpose, main_content: snap.main_content,
+      await API.saveDocument(docId, {
+        purpose: snap.purpose, main_content: snap.main_content,
         detail_content: snap.detail_content, decisions: snap.decisions,
-        pending_items: snap.pending_items, check_required_items: snap.check_required_items }, `v${ver.version_number} 버전 복원`);
+        pending_items: snap.pending_items, check_required_items: snap.check_required_items
+      }, `v${ver.version_number} 버전 복원`);
       this.toast('버전이 복원되었습니다.');
       this.openDocument(docId);
     } catch(e) { this.toast('복원 실패', 'error'); }
   },
 
-  closeDocModal() { document.getElementById('modal-doc').classList.remove('open'); document.body.classList.remove('modal-open'); },
+  closeDocModal() {
+    document.getElementById('modal-doc').classList.remove('open');
+    document.body.classList.remove('modal-open');
+  },
 
   // ════════════════════════════════════════════════════
   // 댓글
@@ -738,14 +846,11 @@ ${canEdit?`
     const input = document.getElementById(`comment-input-${type}-${id}`);
     if (!input || !input.value.trim()) return;
     try {
-      const comment = await API.addComment(type, id, input.value.trim());
+      await API.addComment(type, id, input.value.trim());
       input.value = '';
       const container = document.getElementById(`comments-${type}-${id}`);
       if (container) {
-        const newHTML = this._buildComments(
-          (await API.getComments(type, id)), type, id
-        );
-        container.innerHTML = newHTML;
+        container.innerHTML = this._buildComments(await API.getComments(type, id), type, id);
       }
     } catch(e) { this.toast('댓글 등록 실패: ' + e.message, 'error'); }
   },
@@ -756,8 +861,7 @@ ${canEdit?`
       await API.deleteComment(commentId);
       const container = document.getElementById(`comments-${type}-${targetId}`);
       if (container) {
-        const newHTML = this._buildComments(await API.getComments(type, targetId), type, targetId);
-        container.innerHTML = newHTML;
+        container.innerHTML = this._buildComments(await API.getComments(type, targetId), type, targetId);
       }
     } catch(e) { this.toast('삭제 실패', 'error'); }
   },
